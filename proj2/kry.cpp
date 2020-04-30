@@ -5,9 +5,13 @@
 #include <sstream>
 #include <iomanip>
 #include <gmp.h>
+#define debug(str,n) std::cerr << __LINE__ << ": " << str << ": " << mpz_get_str( nullptr, FORMAT, n ) << std::endl
+#define print(str) std::cerr << str << std::endl
+
 
 enum Settings     { GENERATE, DECRYPT, ENCRYPT, BREAK, INVALID };
 enum ReturnValues { SUCCESS = 0, INVALID_ARGUMENTS, MPZ_INIT_FAIL, FILE_ACCESS_FAIL };
+const int FORMAT = 10;
 
 bool isUnsigned( const std::string & str ) {
     for ( char c : str ) {
@@ -89,8 +93,9 @@ void printResultVector( ReturnValues ret_value, const std::vector<mpz_t> & resul
 }
 
 
-ReturnValues randomNumber( mpz_t & result, size_t bits ) {
-    size_t size = ( ( bits + 8 - ( bits % 8 ) ) ) >> 3;
+ReturnValues randomNumber( mpz_t & result, size_t bits, bool mask = false ) {
+    size_t extra = bits % 8;
+    size_t size  = ( ( bits + 8 - extra ) ) >> 3;
     std::vector<char> bytes( size );
     
     //std::cout << size << std::endl;
@@ -102,6 +107,12 @@ ReturnValues randomNumber( mpz_t & result, size_t bits ) {
     randomSrc.close();
     
     std::string hex = bytes2hex( bytes );
+    
+    if ( mask ) {
+        bytes[0] >>= extra;
+        bytes[0] |= (0b1000000 >> extra); 
+        bytes[ bytes.size() - 1 ] |= 1;
+    }
     
     if ( mpz_set_str( result, hex.c_str(), 16 ) ) {
         return MPZ_INIT_FAIL;
@@ -133,12 +144,16 @@ void power( mpz_t & result, const mpz_t & base, const mpz_t & exp, const mpz_t &
         mpz_mod_ui( tmp, e, 2 );
         if ( mpz_cmp_ui( tmp, 1 ) == 0 ) {
             mpz_mul( result, result, a );
+            mpz_sub_ui( e, e, 1 );
         }
-        mpz_div_ui( e, e, 2 );
-        mpz_mul( a, a, a );
-        mpz_mod( a, a, mod );
+        else {
+            
+            mpz_div_ui( e, e, 2 );
+            mpz_mul( a, a, a );
+            mpz_mod( a, a, mod );
+        }
     }
-    mpz_clears( a, e, tmp );
+    mpz_clears( a, e, tmp, nullptr   );
 }
 
 void gcd( mpz_t & result, const mpz_t & a, const mpz_t & b ) {
@@ -159,7 +174,8 @@ void gcd( mpz_t & result, const mpz_t & a, const mpz_t & b ) {
     }
 }
 
-bool isPrime( const mpz_t & n, size_t k = 30 ) {
+bool isPrime( const mpz_t & n, size_t primeSize, size_t iterations = 30 ) {
+    debug( "Testing", n );
     if ( mpz_cmp_ui( n, 1 ) <= 0 || mpz_cmp_ui( n, 4 ) == 0 ) {
         return false;
     }
@@ -167,17 +183,28 @@ bool isPrime( const mpz_t & n, size_t k = 30 ) {
         return true;
     }
     
-    while ( k-- > 0 ) {
-       //  int a = 2 + rand()%(n-4);   
-       // 
-       // // Checking if a and n are co-prime 
-       // if (gcd(n, a) != 1) 
-       //    return false; 
-       // 
-       // // Fermat's little theorem 
-       // if (power(a, n-1, n) != 1) 
-       //    return false; 
+    mpz_t r, n4, n1, tmp;
+    mpz_inits( r, n1, n4, tmp, nullptr );
+    mpz_sub_ui( n4, n, 4 );
+    mpz_sub_ui( n1, n, 1 );
+    
+    while ( iterations-- > 0 ) {
+        randomNumber( r, primeSize );
+        //debug( "Random", n );
+        mpz_mod( r, r, n4 );
+        mpz_add_ui( r, r, 2 );
+        //debug( "Result", n );
+        gcd( tmp, n, r );
+        if ( mpz_cmp_ui( tmp, 1 ) != 0 ) {
+            debug( "GCD", tmp );
+            return false;
+        }
         
+        power( tmp, r, n1, n );
+        if ( mpz_cmp_ui( tmp, 1 ) != 0 ) {
+            debug( "POWER", tmp );
+            return false;
+        }
     }
     
     return true;
@@ -185,21 +212,26 @@ bool isPrime( const mpz_t & n, size_t k = 30 ) {
 
 ReturnValues generate_key( size_t b, mpz_t & p, mpz_t & q, mpz_t & n, mpz_t & e, mpz_t & d ) {
 
-    int extraBit = b % 2;
+    size_t sizep = ( b >> 1 ) + b % 2;
+    size_t sizeq = ( b >> 1 );
     do {
-        ReturnValues test = randomNumber( p, ( b >> 1 ) + extraBit );
+        ReturnValues test = randomNumber( p, sizep, true );
         if ( test != SUCCESS ) {
             return test;
         }
-    } while ( !isPrime( p ) );
+        print( "==========================" );
+    } while ( !isPrime( p, sizep ) );
+    debug( "Prime", p );
     
     do {
-        ReturnValues test = randomNumber( q, b >> 1 );
+        ReturnValues test = randomNumber( q, sizeq, true );
         if ( test != SUCCESS ) {
             return test;
         }
-    } while ( !isPrime( p ) );
-    
+        print( "===========================" );
+    } while ( !isPrime( q, sizeq ) );
+    debug( "Prime", q );    
+    /*
     mpz_mul( n, p, q );
     
     mpz_t p_1, q_1, phi, gcd, mul, mod;
@@ -222,8 +254,8 @@ ReturnValues generate_key( size_t b, mpz_t & p, mpz_t & q, mpz_t & n, mpz_t & e,
         mpz_mul(mul, e, d);
         mpz_mod(mod, mul, phi);
     } while ( mpz_cmp_ui( mod, 1 ) != 0 );
-    mpz_clears(gcd, p_1, q_1, mul, mod, phi, e, NULL);
-    
+    mpz_clears(p_1, q_1, phi, gcd, mul, mod, NULL);
+    */
     return SUCCESS;
 }
 
@@ -244,18 +276,18 @@ int main( int argc, const char ** argv ) {
     ReturnValues ret_value = SUCCESS;
     
     if ( mode == GENERATE ) {
-        mpz_t p, q, d, n, e;
+        mpz_t p, q, n, e, d;
         mpz_inits( p, q, n, e, d, nullptr );
         ret_value = generate_key( std::atoi( argv[2] ), p, q, n, e, d );
-        mpz_clears( d, n, nullptr );
         if ( ret_value == SUCCESS ) {
-            std::string p_str( mpz_get_str( nullptr, 16, p ) ),
-                        q_str( mpz_get_str( nullptr, 16, q ) ),
-                        n_str( mpz_get_str( nullptr, 16, n ) ),
-                        e_str( mpz_get_str( nullptr, 16, e ) ),
-                        d_str( mpz_get_str( nullptr, 16, d ) );
+            std::string p_str( mpz_get_str( nullptr, FORMAT, p ) ),
+                        q_str( mpz_get_str( nullptr, FORMAT, q ) ),
+                        n_str( mpz_get_str( nullptr, FORMAT, n ) ),
+                        e_str( mpz_get_str( nullptr, FORMAT, e ) ),
+                        d_str( mpz_get_str( nullptr, FORMAT, d ) );
             std::cout << p_str << ' ' << q_str << ' ' << n_str << ' ' << e_str << ' ' << d_str << std::endl;
         }
+        mpz_clears( p, q, n, e, d, nullptr );
     }
     else if ( mode == DECRYPT ) {
         mpz_t d, n;

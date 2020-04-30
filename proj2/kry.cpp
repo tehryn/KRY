@@ -95,7 +95,7 @@ void printResultVector( ReturnValues ret_value, const std::vector<mpz_t> & resul
 
 ReturnValues randomNumber( mpz_t & result, size_t bits, bool mask = false ) {
     size_t extra = bits % 8;
-    size_t size  = ( ( bits + 8 - extra ) ) >> 3;
+    size_t size  = ( ( bits + 8 - ( extra > 0 ? extra : 8 ) ) ) >> 3;
     std::vector<char> bytes( size );
     
     //std::cout << size << std::endl;
@@ -106,13 +106,13 @@ ReturnValues randomNumber( mpz_t & result, size_t bits, bool mask = false ) {
     }
     randomSrc.close();
     
-    std::string hex = bytes2hex( bytes );
-    
     if ( mask ) {
-        bytes[0] >>= extra;
-        bytes[0] |= (0b1000000 >> extra); 
+        bytes[0] &= 0b11111111 >> extra;
+        bytes[0] |= 0b10000000 >> extra; 
         bytes[ bytes.size() - 1 ] |= 1;
     }
+    
+    std::string hex = bytes2hex( bytes );
     
     if ( mpz_set_str( result, hex.c_str(), 16 ) ) {
         return MPZ_INIT_FAIL;
@@ -144,14 +144,10 @@ void power( mpz_t & result, const mpz_t & base, const mpz_t & exp, const mpz_t &
         mpz_mod_ui( tmp, e, 2 );
         if ( mpz_cmp_ui( tmp, 1 ) == 0 ) {
             mpz_mul( result, result, a );
-            mpz_sub_ui( e, e, 1 );
         }
-        else {
-            
-            mpz_div_ui( e, e, 2 );
-            mpz_mul( a, a, a );
-            mpz_mod( a, a, mod );
-        }
+        mpz_div_ui( e, e, 2 );
+        mpz_mul( a, a, a );
+        mpz_mod( a, a, mod );
     }
     mpz_clears( a, e, tmp, nullptr   );
 }

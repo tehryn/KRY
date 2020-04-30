@@ -131,74 +131,65 @@ function powerMod(b, e, m)
     return x
  */
 
-void power( mpz_t & result, const mpz_t & base, const mpz_t & exp, const mpz_t & mod ) {
-    mpz_t a, e, tmp;
-    mpz_inits( a, e, tmp, nullptr );
-    mpz_set_ui( result, 1 );
+ void gcd( mpz_t & result, const mpz_t & a, const mpz_t & b ) {
+     if ( mpz_cmp( a, b ) < 0 ) {
+         gcd( result, b, a );
+     }
+     else {
+         mpz_t mod;
+         mpz_init( mod );
+         mpz_mod( mod, a, b );
+         if ( mpz_cmp_ui( mod, 0 ) == 0 ) {
+             mpz_set( result, b );
+         }
+         else {
+             gcd( result, b, mod );
+         }
+         mpz_clear( mod );
+     }
+ }
+
+bool powerTest( const mpz_t & base, const mpz_t & exp, const mpz_t & mod ) {
+    mpz_t a, b, e, tmp;
+    mpz_inits( a, e, tmp, b, nullptr );
     
-    mpz_set( a, base );
+    mpz_set_ui( a, 1 );
+    mpz_set( b, base );
     mpz_set( e, exp );
-    mpz_mod( a, a, mod );
     
     while( mpz_cmp_ui( e, 0 ) > 0 ) {
         mpz_mod_ui( tmp, e, 2 );
         if ( mpz_cmp_ui( tmp, 1 ) == 0 ) {
-            mpz_mul( result, result, a );
+            mpz_mul( a, a, b );
+            mpz_mod( a, a, mod );
         }
+        mpz_mul( b, b, b );
+        mpz_mod( b, b, mod );
         mpz_div_ui( e, e, 2 );
-        mpz_mul( a, a, a );
-        mpz_mod( a, a, mod );
     }
-    mpz_clears( a, e, tmp, nullptr   );
-}
-
-void gcd( mpz_t & result, const mpz_t & a, const mpz_t & b ) {
-    if ( mpz_cmp( a, b ) < 0 ) {
-        gcd( result, b, a );
-    }
-    else {
-        mpz_t mod;
-        mpz_init( mod );
-        mpz_mod( mod, a, b );
-        if ( mpz_cmp_ui( mod, 0 ) == 0 ) {
-            mpz_set( result, b );
-        }
-        else {
-            gcd( result, b, mod );
-        }
-        mpz_clear( mod );
-    }
+    
+    mpz_mod( a, a, mod );
+    int ret = mpz_cmp_ui( a, 1 );
+    mpz_clears( a, e, tmp, b, nullptr );
+    return ret != 0;
 }
 
 bool isPrime( const mpz_t & n, size_t primeSize, size_t iterations = 30 ) {
     debug( "Testing", n );
-    if ( mpz_cmp_ui( n, 1 ) <= 0 || mpz_cmp_ui( n, 4 ) == 0 ) {
+    if ( mpz_cmp_ui( n, 1 ) == 0 ) {
         return false;
     }
-    if ( mpz_cmp_ui( n, 3 ) <= 0 ) {
-        return true;
-    }
     
-    mpz_t r, n4, n1, tmp;
-    mpz_inits( r, n1, n4, tmp, nullptr );
-    mpz_sub_ui( n4, n, 4 );
+    mpz_t tmp, n1;
+    mpz_inits( tmp, n1, nullptr );
     mpz_sub_ui( n1, n, 1 );
     
     while ( iterations-- > 0 ) {
-        randomNumber( r, primeSize );
-        //debug( "Random", n );
-        mpz_mod( r, r, n4 );
-        mpz_add_ui( r, r, 2 );
-        //debug( "Result", n );
-        gcd( tmp, n, r );
-        if ( mpz_cmp_ui( tmp, 1 ) != 0 ) {
-            debug( "GCD", tmp );
-            return false;
-        }
+        randomNumber( tmp, primeSize );
+        mpz_mod( tmp, tmp, n1 );
+        mpz_add_ui( tmp, tmp, 1 );
         
-        power( tmp, r, n1, n );
-        if ( mpz_cmp_ui( tmp, 1 ) != 0 ) {
-            debug( "POWER", tmp );
+        if ( powerTest( tmp, n1, n ) ) {
             return false;
         }
     }

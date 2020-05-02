@@ -151,6 +151,9 @@ void gcd( mpz_t & result, const mpz_t & a, const mpz_t & b ) {
     }
 }
 
+/*
+ * Computes 
+ */
 void powm( mpz_t & result, const mpz_t & num, const mpz_t & exp, const mpz_t & modulo ) {
     mpz_t n;
     mpz_init( n );
@@ -180,6 +183,9 @@ void powm( mpz_t & result, const mpz_t & num, const mpz_t & exp, const mpz_t & m
     mpz_clears( odd, e, n, nullptr );
 }
 
+/*
+ * Used for testing primes
+ */
 bool powerTest( const mpz_t & num, const mpz_t & exp, const mpz_t & modulo ) {
     mpz_t a;
     mpz_init( a );
@@ -189,6 +195,9 @@ bool powerTest( const mpz_t & num, const mpz_t & exp, const mpz_t & modulo ) {
     return ret != 0;
 }
 
+/*
+ * Tests if number is prime
+ */
 bool isPrime( const mpz_t & n, size_t primeSize, size_t iterations = 30 ) {
     if ( mpz_cmp_ui( n, 1 ) == 0 ) {
         return false;
@@ -214,60 +223,141 @@ bool isPrime( const mpz_t & n, size_t primeSize, size_t iterations = 30 ) {
     return ret;
 }
 
+/*
+ * Computes p and q using Pollard’s Rho algorithm for prime factorization
+ */
+ReturnValues primeFactorPollard( mpz_t & p, mpz_t & q, const mpz_t & n ) {
+    if ( mpz_cmp_ui( n, 1 ) == 0 ) {
+        mpz_set_ui( p, 1 );
+        mpz_set_ui( q, 1 );
+        return SUCCESS;
+    }
+    
+    if ( isPrime( n, mpz_sizeinbase( n, 2 ) ) ) {
+        mpz_set( p, n );
+        mpz_set_ui( q, 1 );
+        return SUCCESS;
+    }
+    
+    mpz_t mod, d, x, x2, y, y2, c, num2, sub;
+    bool set = false;
+    ReturnValues ret = SUCCESS;
+    mpz_inits( mod, d, x, x2, y, y2, c, num2, sub, nullptr );
+    mpz_mod_ui( mod, n, 2 );
+    mpz_set_ui( num2, 2 );
+    
+    if ( mpz_cmp_ui( mod, 0 ) == 0 ) {
+        mpz_set_ui( p, 2 );
+        mpz_div_ui( q, n, 2 );
+        set = true;
+    }
+    
+    while ( !set ) {
+        ret = randomNumber( x, mpz_sizeinbase( n, 2 ) );
+        ret = ret == SUCCESS ? randomNumber( c, mpz_sizeinbase( n, 2 ) ) : ret;
+        if ( ret == SUCCESS ) {
+            mpz_set( mod, n );
+            mpz_sub_ui( mod, mod, 2 );
+            mpz_mod( x, x, mod );
+            mpz_add_ui( x, x, 2 );
+            mpz_set( y, x );
+            mpz_add_ui( mod, mod, 1 );
+            mpz_mod( c, c, mod );
+            mpz_add_ui( c, c, 1 );
+            mpz_set_ui( d, 1 );
+            set = true;
+            while( mpz_cmp_ui( d, 1 ) == 0 ) {
+                mpz_set( x2, x );
+                powm( x, x2, num2, n );
+                mpz_add( x, x, c );
+                mpz_add( x, x, n );
+                mpz_mod( x, x, n );
+                mpz_set( y2, y );
+                powm( y, y2, num2, n );
+                mpz_add( y, y, c );
+                mpz_add( y, y, n );
+                mpz_mod( y, y, n );
+                mpz_set( y2, y );
+                powm( y, y2, num2, n );
+                mpz_add( y, y, c );
+                mpz_add( y, y, n );
+                mpz_mod( y, y, n );
+                
+                if ( mpz_cmp( x, y ) >= 0 ) {
+                    mpz_sub( sub, x, y );
+                    gcd( d, sub, n );
+                }
+                else {
+                    mpz_sub( sub, y, x );
+                    gcd( d, sub, n );
+                }
+                
+                if ( mpz_cmp( d, n ) == 0 ) {
+                    set = false;
+                    break;
+                }
+            }
+            if ( set ) {
+                mpz_set( p, d );
+                mpz_div( q, n, d );
+            }
+        }
+        else {
+            break;
+        }
+    }
+    mpz_inits( mod, d, x, x2, y, y2, c, num2, sub, nullptr );
+    return ret;
+}
+
+/*
+ * Computes p and q using common algorithm for prime factorization
+ */
 void primeFactor( mpz_t & p, mpz_t & q, const mpz_t & n ) {
-    bool p_set = false;
-    bool q_set = false;
-    mpz_t n2, mod, i, sq;
-    mpz_inits( n2, mod, i, sq, nullptr );
+    bool set = false;
+    if ( isPrime( n, mpz_sizeinbase( n, 2 ) ) ) {
+        mpz_set( p, n );
+        mpz_set_ui( q, 1 );
+        return;
+    }
+    
+    mpz_t n2, mod, i;
+    mpz_inits( n2, mod, i, nullptr );
     mpz_set( n2, n );
     mpz_mod_ui( mod, n, 2 );
     
-    while ( mpz_cmp_ui( mod, 0 ) == 0 ) {
-        if ( p_set ) {
-            mpz_set_ui( q, 2 );
-            q_set = true;
-            break;
-        }
-        else {
-            mpz_set_ui( p, 2 );
-            mpz_div_ui( n2, n2, 2 );
-            p_set = true;
-        }
+    if ( mpz_cmp_ui( mod, 0 ) == 0 ) {
+        mpz_set_ui( p, 2 );
+        mpz_div_ui( n2, n2, 2 );
+        mpz_set( q, n2 );
+        set = true;
     }
     
-    if ( !q_set ) {
-        mpz_sqrt( sq, n );
-        for ( mpz_set_ui( i, 3 ); (mpz_cmp( i, sq ) <= 0) && !q_set; mpz_add_ui( i, i, 2 ) ) {
+    if ( !set ) {
+        for ( mpz_sqrt( i, n ); (mpz_cmp_ui( i, 3 ) >= 0); mpz_sub_ui( i, i, 2 ) ) {
             mpz_mod( mod, n2, i );
-            while ( mpz_cmp_ui( mod, 0 ) == 0 ) {
-                if ( p_set ) {
-                    mpz_set( q, i );
-                    q_set = true;
-                    break;
-                }
-                else {
-                    mpz_set( p, i );
-                    mpz_tdiv_q( n2, n2, i );
-                    mpz_mod( mod, n2, i );
-                    p_set = true;
-                }
+            if ( mpz_cmp_ui( mod, 0 ) == 0 ) {
+                mpz_set( p, i );
+                mpz_tdiv_q( n2, n2, i );
+                mpz_set( q, n2 );
+                set = true;
+                break;
             }
         }
-        
-        if ( p_set && !q_set && mpz_cmp_ui( n2, 2 ) > 0 ) {
-            mpz_set( q, n2 );
-            q_set = true;
-        }
     }
     
-    if ( !q_set || !p_set ) {
-        mpz_set( q, 0 );
-        mpz_set( p, 0 );
+    if ( !set ) {
+        mpz_set_ui( p, 0 );
+        mpz_set_ui( q, 0 );
+        return;
     }
     
-    mpz_clears( n2, mod, i, sq, nullptr );
+    mpz_clears( n2, mod, i, nullptr );
 }
 
+/*
+ * Computes public and private key from p and q
+ */
 ReturnValues computeKeys( const mpz_t & p, const mpz_t & q, mpz_t & e, mpz_t & d, bool skip_e = false ) {
     mpz_t p1, q1, phi, g, mul, mod;
     mpz_inits( p1, q1, phi, g, mul, mod, nullptr );
@@ -308,6 +398,9 @@ ReturnValues computeKeys( const mpz_t & p, const mpz_t & q, mpz_t & e, mpz_t & d
     return ret;
 }
 
+/*
+ * Generates public and private keys
+ */
 ReturnValues generate_key( size_t b, mpz_t & p, mpz_t & q, mpz_t & n, mpz_t & e, mpz_t & d ) {
     size_t sizep = ( b >> 1 ) + b % 2;
     size_t sizeq = ( b >> 1 );
@@ -329,18 +422,28 @@ ReturnValues generate_key( size_t b, mpz_t & p, mpz_t & q, mpz_t & n, mpz_t & e,
     return computeKeys( p, q, e, d );
 }
 
+/*
+ * Encrypt message
+ */
 ReturnValues encrypt( mpz_t & result, const mpz_t & e, const mpz_t & n, const mpz_t & message ) {
     powm( result, message, e, n);
     return SUCCESS;
 }
 
+/*
+ * Decrypts message
+ */
 ReturnValues decrypt( mpz_t & result, const mpz_t & d, const mpz_t & n, const mpz_t & message ) {
     powm( result, message, d, n);
     return SUCCESS;
 }
 
+/*
+ * Compute primes that were used for key generations and decrypts message
+ */
 ReturnValues unlimitedPower( mpz_t & p, mpz_t & q, mpz_t & decrypted, mpz_t & e, const mpz_t & n, const mpz_t & encrypted ) {
-    primeFactor( p, q, n );
+    primeFactorPollard( p, q, n );
+    //primeFactor( p, q, n );
     if ( mpz_cmp_ui( p, 0 ) == 0 || mpz_cmp_ui( q, 0 ) == 0 ) {
         return INVALID_PARAM_N;
     }
@@ -376,6 +479,9 @@ int main( int argc, const char ** argv ) {
             free( e_str );
             free( d_str );
         }
+        else {
+            std::cerr << "Task Failed" << std::endl;
+        }
         mpz_clears( p, q, n, e, d, nullptr );
     }
     else if ( mode == DECRYPT ) {
@@ -390,6 +496,9 @@ int main( int argc, const char ** argv ) {
                 char * decrypted( mpz_get_str( nullptr, FORMAT, result ) );
                 std::cout << PREFIX << decrypted << std::endl;
                 free( decrypted );
+            }
+            else {
+                std::cerr << "Task Failed" << std::endl;
             }
         }
         else {
@@ -410,6 +519,9 @@ int main( int argc, const char ** argv ) {
                 char * encrypted( mpz_get_str( nullptr, FORMAT, result ) );
                 std::cout << PREFIX << encrypted << std::endl;
                 free( encrypted );
+            }
+            else {
+                std::cerr << "Task Failed" << std::endl;
             }
         }
         else {
@@ -434,6 +546,9 @@ int main( int argc, const char ** argv ) {
                 free( p_str );
                 free( q_str );
                 free( message );
+            }
+            else {
+                std::cerr << "Task Failed" << std::endl;
             }
         }
         else {

@@ -218,7 +218,7 @@ void primeFactor( mpz_t & p, mpz_t & q, const mpz_t & n ) {
     bool p_set = false;
     bool q_set = false;
     mpz_t n2, mod, i, sq;
-    mpz_inits( n2, mod, nullptr );
+    mpz_inits( n2, mod, i, sq, nullptr );
     mpz_set( n2, n );
     mpz_mod_ui( mod, n, 2 );
     
@@ -265,7 +265,7 @@ void primeFactor( mpz_t & p, mpz_t & q, const mpz_t & n ) {
         mpz_set( p, 0 );
     }
     
-    mpz_clears( n2, mod, nullptr );
+    mpz_clears( n2, mod, i, sq, nullptr );
 }
 
 ReturnValues computeKeys( const mpz_t & p, const mpz_t & q, mpz_t & e, mpz_t & d, bool skip_e = false ) {
@@ -346,7 +346,8 @@ ReturnValues unlimitedPower( mpz_t & p, mpz_t & q, mpz_t & decrypted, mpz_t & e,
     }
     mpz_t d;
     mpz_init( d );
-    ReturnValues ret = computeKeys( p, q, e, d );
+    ReturnValues ret = computeKeys( p, q, e, d, true );
+    
     if ( ret == SUCCESS ) {
         ret = decrypt( decrypted, d, n, encrypted );
     }
@@ -418,7 +419,28 @@ int main( int argc, const char ** argv ) {
         mpz_clears( e, n, message, result, nullptr );
     }
     else if ( mode == BREAK ) {
-        
+        mpz_t p, q, e, n, encrypted, decrypted;
+        mpz_inits( p, q, e, n, encrypted, decrypted, nullptr );
+        int flag1 = mpz_set_str( e, argv[2] + 2, 16 );
+        int flag2 = mpz_set_str( n, argv[3] + 2, 16 );
+        int flag3 = mpz_set_str( encrypted, argv[4] + 2, 16 );
+        if ( !flag1 && !flag2 && !flag3 ) {
+            ret_value = unlimitedPower( p, q, decrypted, e, n, encrypted );
+            if ( ret_value  == SUCCESS ) {
+                char * p_str   = mpz_get_str( nullptr, FORMAT, p );
+                char * q_str   = mpz_get_str( nullptr, FORMAT, q );
+                char * message = mpz_get_str( nullptr, FORMAT, decrypted );
+                std::cout << PREFIX << p_str << ' ' << PREFIX << q_str << ' ' << PREFIX << message << std::endl;
+                free( p_str );
+                free( q_str );
+                free( message );
+            }
+        }
+        else {
+            ret_value = MPZ_INIT_FAIL;
+            std::cerr << "Unable to init MPZ numbers." << std::endl;
+        }
+        mpz_clears(  p, q, e, n, encrypted, decrypted, nullptr );
     }
     else {
         std::cerr << "Invalid arguments." << std::endl; ret_value = INVALID_ARGUMENTS;

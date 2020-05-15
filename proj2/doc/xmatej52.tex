@@ -1,0 +1,186 @@
+\documentclass[11pt,a4paper,titlepage]{article}
+\usepackage[left=1.5cm,text={18cm, 25cm},top=2.5cm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage[czech]{babel}
+\usepackage{float}
+\usepackage{color}
+\usepackage{fancyvrb}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[hyphens]{url}
+\usepackage{hyperref}  
+\def\UrlBreaks{\do\/\do-}
+
+\definecolor{mGreen}{rgb}{0,0.6,0}
+\definecolor{mGray}{rgb}{0.5,0.5,0.5}
+\definecolor{mPurple}{rgb}{0.58,0,0.82}
+\definecolor{backgroundColour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+    commentstyle=\color{mGreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{mGray},
+    stringstyle=\color{mPurple},
+    basicstyle=\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                                 
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    language=C
+}
+
+\bibliographystyle{czplain}
+\setlength{\parindent}{0cm}
+\setlength{\parskip}{1em}
+\sloppy
+
+\hypersetup{
+	colorlinks=true,
+	linktoc=all,
+	linkcolor=blue,
+	citecolor=red,
+	urlcolor=blue,
+}
+
+\begin{document}
+
+		\setstretch{0.5}
+		\begin{center}
+
+			\includegraphics[width = 150mm]{logo.png}\\
+
+			\vspace{\stretch{0.382}}
+
+			\LARGE
+			Cryptography\\
+			RSA Implementation and Cracking\\
+			\vspace{\stretch{0.618}}
+
+		\end{center}
+
+	\Large{\today} \hfill Jiří Matějka (xmatej52)
+	\thispagestyle{empty}
+	\newpage
+	\setcounter{page}{1}
+
+    \tableofcontents
+	\newpage
+	\newpage
+
+    \section{Introduction}
+        The goal of this document is to explain how the RSA algorithm was implemented in the second project and what algorithm was used to crack weak RSA keys.
+        
+        RSA (Rivest--Shamir--Adleman) is one of the most commonly used algorithms for data encryption. It is an asymmetric algorithm, so there are two different types of keys -- private key and public key. The algorithm is based on a problem called prime factorization.
+    
+    \section{RSA Implementation}
+        In these section, we will explain:
+        \begin{itemize}
+            \item RSA key creation (Section \ref{rsakey}),
+            \item RSA encryption (Section \ref{rsacryption}),
+            \item RSA decryption (Section \ref{rsacryption}).
+        \end{itemize}
+        
+        \subsection{RSA Key Creation}
+        \label{rsakey}
+            The first step to generate RSA keypair is to generate two random primes -- $p$ and $q$. In this works, program access file \textit{/dev/urandom} to generate a random number, then the first and the last bits of the number are set to 1 and finally the number the primality is tested using the Fermat primality test. This process is repeated until two primes are generated.
+            
+            Then modulus $n = p * q$ is computed. This modulus is part of both private and public keys. We also compute $phi(n) = (q - 1) /times (p - 1)$
+            
+            Then random number $e$ is generated. Number $e$ is generated again, until condition $e > 1 and gcd(e, phi(n)) = 1$ is fullfiled.
+            
+            Once $e$ is known, we compute the multiplicative inverse of $e$ and $phi(n)$ and store it into number $d$. The pairs $(e, n)$ and $(d, n)$ can be used as private or public keys.
+        
+        \subsection{RSA Encryption and Decryption}
+            \label{rsacryption}
+            The process of encrypting and decrypting data is the same. For data encryption (or decryption) algorithm called modular exponentiation.
+        
+    \section{RSA Cracking}
+        To crack the RSA, we need to compute numbers $p$ and $q$ from modulus $n$. This can be done with prime factorization. Since we need to find only one divisor of modulus $n$, we used in the project Pollard’s Rho algorithm for prime factorization. The concept of this algorithm is:
+        \begin{enumerate}
+            \item Two numbers x and y are said to be congruent modulo $n$ ($x = y mod n$) if one of the following conditions is true:
+            \begin{enumerate}
+                \item Each of them has the same remainder if they are divided by $n$
+                \item Their difference is an integer multiple of $n$
+            \end{enumerate}
+            \item The Greatest common divisor is the largest number that divides into each of the original numbers.
+            \item Birthday Paradox.
+            \item Floyd’s cycle-finding algorithm.
+        \end{enumerate}
+        
+        And the implemented algorithm works as follows:
+\begin{lstlisting}[style=CStyle]
+primeFactorPollard( n, p, q ) {
+    if ( n == 1 ) {
+        p = 1;
+        q = 1;
+        return;
+    }
+    
+    if ( isPrime( n ) ) {
+        p = n;
+        q = 1;
+        return;
+    }
+    
+    if ( n % 2 == 0 ) {
+        p = 2;
+        q = n / 2;
+        return;
+    }
+    
+    while ( true ) {
+        x = random();
+        c = random();
+        
+        // Birthday paradox
+        x = ( x % ( n - 2 ) ) + 2;
+        c = ( c % ( n - 1 ) ) + 1;
+        y = 1
+        d = 1;
+        while ( d == 1 && d != n ) {
+            // Tortoise Move x(i+1) = f(x(i))
+            x = powerModulus( x, 2, n )
+            x = x + c + n
+            x = x % n
+            
+            // Hare Move y(i+1) = f(f(y(i)))
+            y = powerModulus( y, 2, n )
+            y = y + c + n
+            y = y % n
+            y = powerModulus( y, 2, n )
+            y = y + c + n
+            y = y % n
+            
+            if ( x > y ) {
+                d = gcd( x - y, n )
+            }
+            else {
+                d = gcd( y - x, n )
+            }
+            
+            if ( d != 1 && d != n ) {
+                p = d;
+                q = d / 2;
+                return;
+            }
+        }
+    }
+}
+\end{lstlisting}
+        
+        After the $p$ and $q$ is found, the private key can be computed the same way as described in section \ref{rsakey}. And using the private key, the message can decrypted.
+        
+        Information needed to implement and describe Pollard’s Rho algorithm for prime factorization was gained from \cite{web:geeks}.
+        
+    \section{Conclusion}
+        The goal of this project was to implement an application that will be able to generate RSA keypair, encrypt messages, decrypt messages and crack RSA algorithm. The software is capable to generate keypairs, encrypt and decrypt messages and can crack the 96 bit RSA key under 10 seconds on intel i5-7300HQ processor using only one core.
+    \newpage
+    \bibliography{zdroje}
+
+\end{document}
